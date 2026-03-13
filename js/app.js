@@ -32,6 +32,13 @@ const submitBtn = document.getElementById('submitBtn');
 const searchForm = document.getElementById('searchForm');
 const sourceList = document.getElementById('sourceList');
 
+/** Escape for safe use in HTML to prevent XSS. */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 /** Simple IPv4 validation; allow IPv6. */
 function isValidIP(value) {
   const v4 =
@@ -61,10 +68,12 @@ ipInput.addEventListener('input', () => {
   const valid = isValidIP(v);
   setInputValid(valid);
   setHint(valid ? 'Valid IP' : 'Enter a valid IPv4 or IPv6 address', !valid);
+  updateSourceLinks();
 });
 
 ipInput.addEventListener('blur', () => {
   if (!ipInput.value.trim()) setHint('');
+  updateSourceLinks();
 });
 
 function openAllTabs(ip) {
@@ -94,28 +103,41 @@ searchForm.addEventListener('submit', (e) => {
   openAllTabs(ip);
 });
 
-// Render source list (links open that single source with current IP on click)
+// Update each source link's href so the browser shows the URL in the status bar on hover
+function updateSourceLinks() {
+  const ip = ipInput.value.trim();
+  const hasValidIp = ip && isValidIP(ip);
+  sourceList.querySelectorAll('a[data-index]').forEach((a) => {
+    const i = parseInt(a.getAttribute('data-index'), 10);
+    if (Number.isNaN(i) || i < 0 || i >= SOURCES.length) return;
+    const source = SOURCES[i];
+    a.href = hasValidIp ? source.getUrl(ip) : '#';
+  });
+}
+
+// Render source list (real links so status bar shows URL on hover; open in new tab)
 function renderSourceList() {
   sourceList.innerHTML = SOURCES.map(
     (s, i) =>
-      `<li><a href="#" data-index="${i}" title="Open ${s.name} with entered IP">${s.name}</a></li>`
+      `<li><a href="#" data-index="${i}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.name)}</a></li>`
   ).join('');
 
   sourceList.querySelectorAll('a').forEach((a) => {
     a.addEventListener('click', (e) => {
-      e.preventDefault();
       const ip = ipInput.value.trim();
       if (!ip || !isValidIP(ip)) {
+        e.preventDefault();
         setHint('Enter a valid IP first', true);
         setInputValid(false);
         ipInput.focus();
         return;
       }
       const i = parseInt(a.getAttribute('data-index'), 10);
-      const source = SOURCES[i];
-      if (source) window.open(source.getUrl(ip), '_blank', 'noopener,noreferrer');
+      if (Number.isNaN(i) || i < 0 || i >= SOURCES.length) e.preventDefault();
     });
   });
+
+  updateSourceLinks();
 }
 
 renderSourceList();
